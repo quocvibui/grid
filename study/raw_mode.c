@@ -2,6 +2,7 @@
  * Boiler code from AP in the UNIX ENV
  * Enabling raw mode, with type and delete
  * Quoc Bui (buiviquoc@gmail.com)
+ * Works on xterm, emulator of VT100 term
  */
 #include <termios.h>
 #include <stdio.h>
@@ -47,7 +48,7 @@ int tty_raw(int fd){
      * check off, don’t strip 8th bit on input, output
      * flow control off.
      */
-    buf.c_iflag &=  ~(BRKINT | ICR| INPCK | ISTRIP | IXON);
+    buf.c_iflag &=  ~(BRKINT | INPCK | ISTRIP | IXON);
     /*
      * Clear size bits, parity checking off.
      */
@@ -77,7 +78,7 @@ int tty_raw(int fd){
 		return(-1);
 	}
 	if ((buf.c_lflag & (ECHO | ICANON | IEXTEN | ISIG)) ||
-	(buf.c_iflag & (BRKINT | ICRNL | INPCK | ISTRIP | IXON)) ||
+	(buf.c_iflag & (BRKINT | INPCK | ISTRIP | IXON)) ||
 	(buf.c_cflag & (CSIZE | PARENB | CS8)) != CS8 ||
 	(buf.c_oflag & OPOST) || buf.c_cc[VMIN] != 1 ||
 	buf.c_cc[VTIME] != 0) {
@@ -133,11 +134,11 @@ int main(){
     
 	// raw mode
 	if (tty_raw(STDIN_FILENO) < 0) die("tty_raw error");
-	printf("Enter raw mode characters, terminate with CTRL+Q\n");
-	fflush(stdout);
+	printf("Enter raw mode characters, terminate with CTRL+Q\r\n");
 	while ((i = read(STDIN_FILENO, &c, 1)) == 1) {
 		// adding 0 means base 8 ... 
 		if ((c &= 255) == 021) break; /* 21 = CTRL-Q */
+		else if( c == '\n') printf("\r\n");
 		else if( c == 8 || c == 127) printf("\b \b"); 
 		else printf("%c", c);
 		fflush(stdout);
