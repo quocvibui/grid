@@ -20,6 +20,7 @@ void die(char *str){
 static struct termios save_termios;
 static int ttysavefd = -1;
 static enum { RESET, RAW } ttystate = RESET;
+static FILE *fp;
 
 // function headers
 int tty_raw(int fd);
@@ -121,7 +122,14 @@ static void sig_catch(int signo){
     exit(0);
 }
 
-int main(){
+int main(int argc, char *argv[]){
+	if (argc <= 1) die("Oops we haven't implemented that yet");
+	
+	fp = fopen(argv[1], "r+"); // open file for writing
+	if (fp == NULL) die("Problem with fopen()");
+
+	printf("\e[1;1H\e[2J"); // clear screen?
+
 	int i; 
 	char c;
 
@@ -138,14 +146,26 @@ int main(){
 	while ((i = read(STDIN_FILENO, &c, 1)) == 1) {
 		// adding 0 means base 8 ... 
 		if ((c &= 255) == 021) break; /* 21 = CTRL-Q */
-		else if( c == '\n') printf("\r\n");
-		else if( c == 8 || c == 127) printf("\b \b"); 
-		else printf("%c", c);
+		else if( c == '\n'){
+			printf("\r\n");
+			fprintf(fp, "\r\n");
+		}
+		else if( c == 8 || c == 127){
+			printf("\b \b");
+			fprintf(fp, "\b \b"); 
+		}
+		else{ 
+			printf("%c", c);
+			fprintf(fp, "%c", c);
+		}
 		fflush(stdout);
+		fflush(fp);
 	}
 	if (tty_reset(STDIN_FILENO) < 0) die("tty_reset error");
 	
 	if (i <= 0) die("read error");
-	
+
+	fprintf(fp, "\n"); // add an EOF
+	fclose(fp);
 	return 0; 
 }
