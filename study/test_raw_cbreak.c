@@ -183,7 +183,7 @@ int main(){
 	printf("Enter raw mode characters, terminate with DELETE\n");
 	while ((i = read(STDIN_FILENO, &c, 1)) == 1) {
 		if ((c &= 255) == 0177) break; /* 0177 = ASCII DELETE */
-		printf("[%c] %o\n", c, c);
+		printf("[%c] %o\n [decimal: %d]", c, c, c);
 	}
 	if (tty_reset(STDIN_FILENO) < 0) die("tty_reset error");
 	
@@ -194,7 +194,7 @@ int main(){
 	printf("\nEnter cbreak mode characters, terminate with SIGINT\n");
 	while ((i = read(STDIN_FILENO, &c, 1)) == 1) {
 		c &= 255;
-		printf("[%c] %o\n", c, c);
+		printf("[%c] %o\n [decimal: %d]", c, c, c);
 	}
 	if (tty_reset(STDIN_FILENO) < 0) die("tty_reset error");
 	if (i <= 0) die("read error");

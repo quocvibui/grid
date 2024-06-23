@@ -3,7 +3,13 @@ CC = gcc
 
 CFLAGS = -g -Wall
 
-all: disable_EOF window_size test_raw_cbreak raw_mode
+all: pretty move_cursor disable_EOF window_size test_raw_cbreak raw_mode
+
+pretty: pretty.o
+pretty.o: pretty.c
+
+move_cursor: move_cursor.o
+move_cursor.o: move_cursor.c
 
 disable_EOF: disable_EOF.o
 disable_EOF.o: disable_EOF.c
@@ -19,4 +25,4 @@ raw_mode.o: raw_mode.c
 
 .PHONY: clean
 clean:
-	rm -f *.o a.out disable_EOF window_size test_raw_cbreak raw_mode
+	rm -f *.o a.out disable_EOF window_size test_raw_cbreak raw_mode pretty move_cursor

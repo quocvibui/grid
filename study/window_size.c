@@ -33,7 +33,7 @@ int main(){
 	if (isatty(STDIN_FILENO) == 0) die("isatty() failed");
 	
 	if (signal(SIGWINCH, sig_winch) == SIG_ERR) die("signal error");
-
+	
 	pr_winsize(STDIN_FILENO); /* print initial size forever */
 	for(;;)					 /*  and sleep forever */
 		pause();
