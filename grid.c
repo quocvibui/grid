@@ -24,17 +24,17 @@ static int ttysavefd = -1;
 static enum { RESET, RAW } ttystate = RESET;
 static FILE *fp;
 
+// dealing with buffer and cursors
 char *buffer = NULL;
-int length = 0;
-int cursor_pos = 0;
+int buffer_index = 0;
 long long buf_size = 1024;
 
 // function headers
 int tty_raw(int fd);
 int tty_reset(int fd);
 void clear_screen();
-void print_buffer();
-void handle_input();
+void display_buffer(char c);
+void handle_input(char c);
 void sig_catch(int signo);
 void resize_buffer();
 
@@ -89,17 +89,17 @@ int tty_raw(int fd){
 
 /* restore terminal’s mode */
 int tty_reset(int fd){
-    if (ttystate == RESET) return 0;
-    if (tcsetattr(fd, TCSAFLUSH, &save_termios) < 0) return -1;
-    ttystate = RESET;
+	if (ttystate == RESET) return 0;
+	if (tcsetattr(fd, TCSAFLUSH, &save_termios) < 0) return -1;
+	ttystate = RESET;
 	return 0;
 }
 
 /* signal catch error for main */
 void sig_catch(int signo){
-    printf("signal caught\n");
-    tty_reset(STDIN_FILENO);
-    exit(0);
+	printf("signal caught\n");
+	tty_reset(STDIN_FILENO);
+	exit(0);
 }
 
 /* Do what it meant, clear everything */
@@ -107,29 +107,26 @@ void clear_screen(){
 	printf("\e[1;1H\e[2J");
 }
 
-/* Move the cursor around */
+/* Move the cursor around - RECHECK THIS */
 void move_cursor(int row, int col){
 	printf("\033[%d;%dH", row + 1, col + 1);
 }
 
-/* print what is in there */
-void print_buffer(){
-	clear_screen();
-	int line = 0, col = 0;
-	for (int i = 0; i < length; i++){
-		if (i == cursor_pos) move_cursor(line, col); // if nt keep the same
-
-		if (buffer[i] == '\n'){ // basically like an enter
-			line++;
-			col = 0;
-		} 
-		else{
-			col++; // just move along the column to print	
-		}
-		putchar(buffer[i]);
+/* print what is in there - REWRITE THIS */
+void display_buffer(char c){
+	switch(c){
+		case 127:
+		case 8:
+			printf("\b \b");
+			break;
+		case '\r':
+		case '\n':
+			printf("\r\n");
+			break;
+		default:
+			printf("%c", c);
+			break;
 	}
-	if(cursor_pos == length) move_cursor(line, col);
-
 	fflush(stdout);
 }
 
@@ -141,93 +138,88 @@ void resize_buffer(){
 }
 
 /* process user input from STDIN */
-void handle_input(){
-	char c;
-	int nread = read(STDIN_FILENO, &c, 1);
-	if (nread == -1) die("read error");
+void handle_input(char c){
 
 	switch(c){
 		case 127: // DELETE or BACKSPACE
-		case '\b': // this the same as '\b'
-			if (cursor_pos > 0){
-				memmove(&buffer[cursor_pos -1], &buffer[cursor_pos], length - cursor_pos);
-				cursor_pos--;
-				length--;
-			}
+		case 8: // this the same as BACKSPACE
+			if ((buffer_index - 1) >= 0) buffer[--buffer_index] = 0; // haven't implement arrow key delete yet...
+			// this is to allow not to exceed pointer, but I will ignore anything beyond 1024 now lol
 			break;
-		// taken from https://viewsourcecode.org/snaptoken/kilo/03.rawInputAndOutput.html
-		case 27: // ESCAPE sequence
-			{
-				char seq[3]; // the escape sequence will hold 3 bytes
-				if (read(STDIN_FILENO, &seq[0], 1) == -1) break;
-				if (read(STDIN_FILENO, &seq[1], 1) == -1) break;
-				if (seq[0] == '['){
-					switch(seq[1]){
-						case 'A': // UP arrow
-							// will implement later
-							break;
-						case 'B': // DOWN arrow
-							break;
-						case 'C': // RIGHT arrow
-							if (cursor_pos < length) cursor_pos++;
-							break;
-						case 'D': // LEFT arrow
-							if (cursor_pos > 0) cursor_pos--;
-							break;
-					}		
-				}
-			}
-			break;
-		case '\r':
+		case '\r': // ENTER
 		case '\n': // ENTER
-			if (length + 1 >= buf_size) resize_buffer();
-			memmove(&buffer[cursor_pos + 1], &buffer[cursor_pos], length - cursor_pos);
-			buffer[cursor_pos] = '\n';
-			cursor_pos++;
-			length++;
-			break;
-		case 021: // CTRL+Q to exit
-			exit(0);
+			buffer[buffer_index] = c;
+			buffer_index++;
 			break;
 		default: // Regular characters
-			if (length + 1 >= buf_size) resize_buffer(); // make bigger if needed
-			memmove(&buffer[cursor_pos + 1], &buffer[cursor_pos], length - cursor_pos);
-			buffer[cursor_pos] = c;
-			cursor_pos++;
-			length++;
+			buffer[buffer_index] = c;
+			buffer_index++;
 			break;
 	} // end of switch
+
 }
+
+/* get current file size -- IGNORE THIS FOR NOW */
+int get_file_size(char* file_name){
+
+	FILE* fp = fopen(file_name, "rb");
+	if (fp == NULL) return 0; // there is nothing so ...
+	
+	fseek(fp, 0L, SEEK_END); // go to the end
+
+	int res = ftell(fp); // get file size
+
+	fclose(fp);
+
+	return res;
+}
+
+/* write from FILE to BUFFER - IGNORE THIS FOR NOW */
+void file_to_buffer(FILE* fp);
+
 
 /* Main Method */
 int main(int argc, char *argv[]){
 	if (argc <= 1) die("Oops we haven't implemented that yet");
-	
-	buffer = malloc(buf_size);
+
+	// allocate for buffer
+	buffer = malloc(buf_size + 1); // buf size is currently 1024, 1 is for null terminate
 	if (buffer == NULL) die("Malloc failed");
 
-	fp = fopen(argv[1], "r+"); // open file for writing
-	if (fp == NULL) die("Problem with fopen()");
-
-	length = fread(buffer, 1, buf_size, fp);
-
-	/* catch signals */
+	// catch error signal
 	if (signal(SIGINT, sig_catch) == SIG_ERR) die("signal(SIGINT) error"); 
 	if (signal(SIGQUIT, sig_catch) == SIG_ERR) die("signal(SIGQUIT) error");
 	if (signal(SIGTERM, sig_catch) == SIG_ERR) die("signal(SIGTERM) error");
 
+
+	clear_screen(); // clear screen here
 	// raw mode
 	if (tty_raw(STDIN_FILENO) < 0) die("tty_raw error");
 	printf("Enter raw mode characters, terminate with CTRL+Q\r\n");
 
-
-	while (1){
-		print_buffer();
-		handle_input();
+	// now write to buffer and print to terminal screen
+	int i;
+	char c;
+	while ((i = read(STDIN_FILENO, &c, 1)) == 1){
+		if ((c &= 255) == 021) break; /* 021 = CTRL-Q */
+		else{
+			handle_input(c);
+			display_buffer(c);
+		}
 	}
-
-	if (tty_reset(STDIN_FILENO) < 0) die("tty_reset error"); // reset to og setting	
+	display_buffer('\n');
+	buffer[buffer_index] = '\n';
 	
+	// now write from buffer to file
+	fp = fopen(argv[1], "wb"); // !!! it will overwrite files, using TEMPORARY
+	if (fp == NULL) die("Problem with fopen()");
+	int bytes_read = fwrite(buffer, sizeof(char), buffer_index + 1, fp); // + 1 for '\0'
+	free(buffer);
 	fclose(fp);
+
+	// reset to OG state and error checking
+	if (tty_reset(STDIN_FILENO) < 0) die("tty_reset error"); // reset to og setting		
+	if (i <= 0) die("read error");
+
 	return 0; 
 }
