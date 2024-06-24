@@ -1,0 +1,3 @@
+Ok, so edge case, when I hit backspace, I have to think about going back to the end of the second line
+What this means is that backspace move the cursor back up to the top thingy, 
+This means creating a data structure for that...
