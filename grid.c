@@ -49,32 +49,45 @@ struct LINE{ // each line keep their own string and length of the string
 LINE **buffer = NULL; // char[file_rows][file_columns]
 int file_rows = 0; // get max file rows --- or max file lines
 
-// allocate memory for lines --- prob will delete this and create a function that read files into buffer
-LINE  *alloc_LINE(int num, char *str){
-	LINE *line = (LINE *) malloc(sizeof(LINE));
-
-	line->len = num;
-	line->str = (char *) malloc(strlen(sizeof(char) * strlen(str))); // alloc mem for str
-	if (line->str == NULL){
-		free(line);
-		die("Failed at alloc_LINE");
-	}
-
-	strcpy(line->str, str); // now copy from 
-
-	return line;
-}
-
+// allocate memory from file to buffer here... | so far, no logic error as far as I can see
 void file_to_buffer(FILE *fp, int file_size){
 	char c;
+	buffer = (LINE **) malloc(sizeof(LINE *) * 0); // first starting out with nothing to use realloc later
 	while (file_size > 0){
-		c = fgetc(fp);
-		if (c == '\0' || c == '\n'){
-			
-		}
-		file_size--;
-	}
+		LINE **temp = (LINE **) realloc(buffer, (++file_rows) * sizeof(LINE *));
+		if (temp == NULL){
+        	for (int i = 0; i < file_rows; i++)
+            	free(buffer[i]); // free char* /columns allocated prior
+    
+        	free(obj);
+        	die("Initial allocation failed");
+    	}
+		buffer = temp; // now we can reassign the pointer after error check %%%%
 
+		int line_len = 0;
+		char *idv_line = (char *) malloc(sizeof(char) * 0); // first starting out so can use realloc later
+		while ((c = fgetc(fp)) != '\n' && c != '\0' && c != EOF) {
+			char *temp = (char *) realloc(idv_line, sizeof(char) * (line_len + 1));
+			if (temp == NULL){ 
+				free(idv_line); 
+				die("Failed at file_to_buffer()");
+			}
+			idv_line = temp; // now allocated the memory for the idv_line here ...
+			idv_line[line_len++] = c; // now assign the character to this exact spot, -1 because 0-based index
+			file_size--;
+		} // end of inside while loop
+		if (c == EOF) break; // in the worst case
+		
+		LINE *line = (LINE *) malloc(sizeof(LINE));
+		if (line == NULL){
+			free(idv_line);
+			die("Failed at file_to_buffer()");
+		}
+		line->len = line_len;
+		line->str = idv_line; // now LINE *line should be filled with info, ready for LINE **
+
+		buffer[file_rows - 1] = line; // now we can assign the line to that spot, really O(n^2)
+	} // end of main while loop
 }
 
 // add more columns --- which means add more characters to a line
