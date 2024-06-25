@@ -1,8 +1,8 @@
 /*
  * Boiler code from AP in the UNIX ENV
- * Enabling raw mode, with type and delete
  * Quoc Bui (buiviquoc@gmail.com)
  * Works on xterm, emulator of VT100 term
+ * This is a text-editor
  */
 #include <termios.h>
 #include <stdio.h>
@@ -11,6 +11,16 @@
 #include <unistd.h>
 #include <errno.h>
 #include <string.h>
+
+// function headers
+int tty_raw(int fd);
+int tty_reset(int fd);
+void clear_screen();
+void display_buffer(char c);
+void handle_input(char c);
+void sig_catch(int signo);
+void resize_buffer();
+int get_file_size(char* file_name);
 
 /* error checking method */
 void die(char *str){
@@ -24,19 +34,113 @@ static int ttysavefd = -1;
 static enum { RESET, RAW } ttystate = RESET;
 static FILE *fp;
 
-// dealing with buffer and cursors
+// dealing with buffer and cursors - From GOAL 1
 char *buffer = NULL;
 int buffer_index = 0;
-long long buf_size = 1024;
+int buf_size = 1024; // this should be enough for each line
 
-// function headers
-int tty_raw(int fd);
-int tty_reset(int fd);
-void clear_screen();
-void display_buffer(char c);
-void handle_input(char c);
-void sig_catch(int signo);
-void resize_buffer();
+/*-------------------------------| GOAL 2 - BUFFER SYSTEM |--------------------------------------*/
+// new structure to implement buffer and cursors
+struct LINE{ // each line keep their own string and length of the string
+	int len;
+	char *str;
+};
+
+LINE **buffer = NULL; // char[file_rows][file_columns]
+int file_rows = 0; // get max file rows --- or max file lines
+
+// allocate memory for lines --- prob will delete this and create a function that read files into buffer
+LINE  *alloc_LINE(int num, char *str){
+	LINE *line = (LINE *) malloc(sizeof(LINE));
+
+	line->len = num;
+	line->str = (char *) malloc(strlen(sizeof(char) * strlen(str))); // alloc mem for str
+	if (line->str == NULL){
+		free(line);
+		die("Failed at alloc_LINE");
+	}
+
+	strcpy(line->str, str); // now copy from 
+
+	return line;
+}
+
+void file_to_buffer(FILE *fp, int file_size){
+	char c;
+	while (file_size > 0){
+		c = fgetc(fp);
+		if (c == '\0' || c == '\n'){
+			
+		}
+		file_size--;
+	}
+
+}
+
+// add more columns --- which means add more characters to a line
+void add_cols(LINE *obj){
+	if (obj->len < 0) return; 
+
+	char *str = obj->str; // point to str space // will have another allocate str func
+	
+	char *temp = (char *) realloc(str, (obj->len + 1) * sizeof(char));
+	if (temp == NULL){
+		free(obj->str);
+		die("Initial allocation failed");
+	}
+	obj->len++;
+	obj->str = temp;
+}
+
+// delete columns --- which means delete characters from a line
+void del_cols(LINE *obj){
+	if (obj-> len <= 0) return;
+
+	char *str = obj->str;
+
+	char *temp = (char *) realloc(str, (obj->len - 1) * sizeof(char));
+	if (temp == NULL){
+		free(obj->str);
+		die("Initial allocation failed");
+	}
+	obj->len--;
+	obj->str = temp;
+}
+
+
+// add more rows --- which means add more lines to the file
+void add_rows(LINE **obj){
+	if (file_rows < 0) return; // < 0, because you can only add from 0 up
+
+	LINE **temp = (LINE **) realloc(obj, (file_rows + 1) * sizeof(LINE *));
+	if (temp == NULL){
+		for (int i = 0; i < file_rows; i++)
+			free(obj[i]); // free char*/columns allocated prior
+		
+		free(obj);
+		die("Initial allocation failed");
+	}
+	file_rows++;
+	obj = temp;
+}
+
+// delete rows --- which means delete lines from the file
+void del_rows(LINE **obj){
+	if (file_rows <= 0) return;
+
+	free(obj[--file_rows]); // we minus 1 here because of the indexing of arrays
+	LINE **temp = (LINE **) realloc(obj, file_rows * sizeof(LINE *));
+	if (temp == NULL && file_rows > 0){
+		for (int i = 0; i < file_rows; i++)
+			free(obj[i]); // free char*/columns allocated prior
+		
+		free(obj);
+		die("Initial allocation failed");
+	}
+	// we don't have file_rows-- because we have already done that earlier
+	obj = temp;
+}
+/*-------------------------------------------------------------------------------------------------*/
 
 /* put terminal into a raw mode */
 int tty_raw(int fd){
@@ -161,21 +265,18 @@ void handle_input(char c){
 
 /* get current file size -- IGNORE THIS FOR NOW */
 int get_file_size(char* file_name){
-
 	FILE* fp = fopen(file_name, "rb");
+	
 	if (fp == NULL) return 0; // there is nothing so ...
 	
 	fseek(fp, 0L, SEEK_END); // go to the end
-
+	
 	int res = ftell(fp); // get file size
-
+	
 	fclose(fp);
-
+	
 	return res;
 }
-
-/* write from FILE to BUFFER - IGNORE THIS FOR NOW */
-void file_to_buffer(FILE* fp);
 
 
 /* Main Method */
@@ -221,5 +322,7 @@ int main(int argc, char *argv[]){
 	if (tty_reset(STDIN_FILENO) < 0) die("tty_reset error"); // reset to og setting		
 	if (i <= 0) die("read error");
 
+	clear_screen(); // clear screen again :)
+	
 	return 0; 
 }
