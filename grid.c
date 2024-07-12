@@ -95,11 +95,21 @@ void file_to_buffer(FILE *fp, int file_size){
 	} // end of main while loop
 }
 
+void print_buffer(struct LINE **buffer, int file_rows) {
+	// as of now, it works when I do i < file_rows - 1 => kinda WEIRD, need to check where I have gone wrong ...
+    for (int i = 0; i < file_rows - 1; i++) {
+		for (int j = 0; j < buffer[i]->len; j++){
+			putchar(buffer[i]->str[j]);
+		}
+		putchar('\n');
+    }
+}
+
 // now delete memories used
 void free_buffer(struct LINE ***obj, int line_size){
 	if (*obj == NULL) return;
 
-	for (int i = 0; i < file_rows; i++){
+	for (int i = 0; i < file_rows - 1; i++){
 		if ((*obj)[i] != NULL) {
 			free((*obj)[i]->str); // Free str inside LINE
 			free((*obj)[i]); // Free LINE
@@ -341,17 +351,17 @@ int get_file_size(char* file_name){
 int main(int argc, char *argv[]){
 	if (argc <= 1) die("Oops we haven't implemented that yet"); // I will implement this logic later
 
-	int file_size = get_file_size(argv[1]);
-	file_write_to = fopen(argv[1], "rb"); // in the mean time I will do this
-	file_to_buffer(file_write_to, file_size); // now read from file to buffer
-
 	// catch error signal
 	if (signal(SIGINT, sig_catch) == SIG_ERR) die("signal(SIGINT) error"); 
 	if (signal(SIGQUIT, sig_catch) == SIG_ERR) die("signal(SIGQUIT) error");
 	if (signal(SIGTERM, sig_catch) == SIG_ERR) die("signal(SIGTERM) error");
 
+	int file_size = get_file_size(argv[1]);
+	file_write_to = fopen(argv[1], "rb"); // in the mean time I will do this
 
-	clear_screen(); // clear screen here
+	file_to_buffer(file_write_to, file_size); // now read from file to buffer
+	clear_screen(); 
+	print_buffer(buffer, file_rows); // let see if it print
 	move_cursor(CUTE.row, CUTE.col); // move to OG position of 0 0 in the beginning
 
 	// raw mode
@@ -377,6 +387,7 @@ int main(int argc, char *argv[]){
 	if (i <= 0) die("read error");
 
 	clear_screen(); // clear screen again :)
+	printf("****\n\nFILE SIZE IS: %d\n\n****\n", file_size);
 	
 	return 0; 
 }
