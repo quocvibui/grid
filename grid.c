@@ -14,12 +14,11 @@
 
 // function headers
 int tty_raw(int fd);
-int tty_reset(int fd);
+int tty_reset(int fd); 
 void clear_screen();
 void display_buffer(char c);
 void handle_input(char c);
 void sig_catch(int signo);
-void resize_buffer();
 int get_file_size(char* file_name);
 
 /* error checking method */
@@ -28,40 +27,46 @@ void die(char *str){
 	exit(1);
 }
 
-// global variables 
-static struct termios save_termios;
-static int ttysavefd = -1;
-static enum { RESET, RAW } ttystate = RESET;
-static FILE *fp;
-
-// dealing with buffer and cursors - From GOAL 1
-char *buffer = NULL;
-int buffer_index = 0;
-int buf_size = 1024; // this should be enough for each line
-
-/*-------------------------------| GOAL 2 - BUFFER SYSTEM |--------------------------------------*/
+/* specific structures for organizations */
 // new structure to implement buffer and cursors
 struct LINE{ // each line keep their own string and length of the string
 	int len;
 	char *str;
 };
 
-LINE **buffer = NULL; // char[file_rows][file_columns]
-int file_rows = 0; // get max file rows --- or max file lines
+struct CURPOR{
+	int row;
+	int col;
+};
+
+// global variables for switching TERM modes
+static struct termios save_termios;
+static int ttysavefd = -1;
+static enum { RESET, RAW } ttystate = RESET;
+static FILE *file_write_to; 
+
+// global variables for buffer system
+struct LINE **buffer = NULL; // char[file_rows][file_columns]
+int file_rows = 0; // keep track of max file rows --- or max file lines
+
+// global variables for cursor positions
+static struct CURPOR CUTE = {0, 0}; // now I can manipulater with CUTE.row CUTE.col
+
+/*-------------------------------| GOAL 2 - BUFFER SYSTEM func() |--------------------------------------*/
 
 // allocate memory from file to buffer here... | so far, no logic error as far as I can see
 void file_to_buffer(FILE *fp, int file_size){
 	char c;
-	buffer = (LINE **) malloc(sizeof(LINE *) * 0); // first starting out with nothing to use realloc later
+	buffer = (struct LINE **) malloc(sizeof(struct LINE *) * 0); // first starting out with nothing to use realloc later
 	while (file_size > 0){
-		LINE **temp = (LINE **) realloc(buffer, (++file_rows) * sizeof(LINE *));
+		struct LINE **temp = (struct LINE **) realloc(buffer, (++file_rows) * sizeof(struct LINE *));
 		if (temp == NULL){
-        	for (int i = 0; i < file_rows; i++)
+			for (int i = 0; i < file_rows; i++)
             	free(buffer[i]); // free char* /columns allocated prior
     
-        	free(obj);
-        	die("Initial allocation failed");
-    	}
+			free(buffer);
+			die("Initial allocation failed");
+		}
 		buffer = temp; // now we can reassign the pointer after error check %%%%
 
 		int line_len = 0;
@@ -78,7 +83,7 @@ void file_to_buffer(FILE *fp, int file_size){
 		} // end of inside while loop
 		if (c == EOF) break; // in the worst case
 		
-		LINE *line = (LINE *) malloc(sizeof(LINE));
+		struct LINE *line = (struct LINE *) malloc(sizeof(struct LINE));
 		if (line == NULL){
 			free(idv_line);
 			die("Failed at file_to_buffer()");
@@ -90,9 +95,27 @@ void file_to_buffer(FILE *fp, int file_size){
 	} // end of main while loop
 }
 
-// add more columns --- which means add more characters to a line
-void add_cols(LINE *obj){
+// now delete memories used
+void free_buffer(struct LINE ***obj, int line_size){
+	if (*obj == NULL) return;
+
+	for (int i = 0; i < file_rows; i++){
+		if ((*obj)[i] != NULL) {
+			free((*obj)[i]->str); // Free str inside LINE
+			free((*obj)[i]); // Free LINE
+		}
+	}
+
+	free(*obj); // free buffer now
+}
+
+/*
+ * add more columns --- which means add more characters to a line
+ */ 
+void add_cols(struct LINE *obj, char c, int pos){
 	if (obj->len < 0) return; 
+
+	if (pos < 0 || pos > obj->len) return; // if not in limit, do nothing and return
 
 	char *str = obj->str; // point to str space // will have another allocate str func
 	
@@ -101,57 +124,62 @@ void add_cols(LINE *obj){
 		free(obj->str);
 		die("Initial allocation failed");
 	}
-	obj->len++;
 	obj->str = temp;
+
+	memmove(obj->str + pos + 1, obj->str + pos, obj->len - pos); // move by the position to add char
+
+	obj->str[pos] = c;
+
+	obj->len++;
 }
 
 // delete columns --- which means delete characters from a line
-void del_cols(LINE *obj){
-	if (obj-> len <= 0) return;
+void del_cols(struct LINE *obj, char c, int pos){
+	if (obj->len <= 0) return;
 
-	char *str = obj->str;
+	if (pos < 0 || pos > obj->len) return; // if not in limit, do nothing and return
 
-	char *temp = (char *) realloc(str, (obj->len - 1) * sizeof(char));
-	if (temp == NULL){
-		free(obj->str);
-		die("Initial allocation failed");
-	}
+	memmove(obj->str + pos - 1 , obj->str + pos + 1, obj->len - pos - 1);
+
 	obj->len--;
-	obj->str = temp;
+
+	// now shrink the memory :)
+	char *temp = realloc(obj->str, obj->len * sizeof(char));
+	if (temp != NULL) obj->str = temp;
 }
 
 
 // add more rows --- which means add more lines to the file
-void add_rows(LINE **obj){
+void add_rows(struct LINE ***obj){
 	if (file_rows < 0) return; // < 0, because you can only add from 0 up
 
-	LINE **temp = (LINE **) realloc(obj, (file_rows + 1) * sizeof(LINE *));
+	struct LINE **temp = (struct LINE **) realloc(*obj, (file_rows + 1) * sizeof(struct LINE *));
 	if (temp == NULL){
 		for (int i = 0; i < file_rows; i++)
 			free(obj[i]); // free char*/columns allocated prior
 		
-		free(obj);
-		die("Initial allocation failed");
+		free(*obj);
+	die("Initial allocation failed");
 	}
 	file_rows++;
-	obj = temp;
+	*obj = temp;
 }
 
 // delete rows --- which means delete lines from the file
-void del_rows(LINE **obj){
+void del_rows(struct LINE ***obj){
 	if (file_rows <= 0) return;
 
 	free(obj[--file_rows]); // we minus 1 here because of the indexing of arrays
-	LINE **temp = (LINE **) realloc(obj, file_rows * sizeof(LINE *));
+	struct LINE **temp = (struct LINE **) realloc(*obj, file_rows * sizeof(struct LINE *));
 	if (temp == NULL && file_rows > 0){
 		for (int i = 0; i < file_rows; i++)
 			free(obj[i]); // free char*/columns allocated prior
 		
-		free(obj);
+		free(*obj);
 		die("Initial allocation failed");
 	}
 	// we don't have file_rows-- because we have already done that earlier
-	obj = temp;
+	*obj = temp;
 }
 /*-------------------------------------------------------------------------------------------------*/
 
@@ -197,7 +225,7 @@ int tty_raw(int fd){
 	buf.c_cc[VTIME] != 0) {
 		tcsetattr(fd, TCSAFLUSH, &save_termios);
 		errno = EINVAL;
-		return(-1);
+		return -1;
 	}
 	ttystate = RAW;
 	ttysavefd = fd;
@@ -224,9 +252,10 @@ void clear_screen(){
 	printf("\e[1;1H\e[2J");
 }
 
-/* Move the cursor around - RECHECK THIS */
+/* Move the cursor around */
 void move_cursor(int row, int col){
 	printf("\033[%d;%dH", row + 1, col + 1);
+	fflush(stdout);
 }
 
 /* print what is in there - REWRITE THIS */
@@ -240,6 +269,12 @@ void display_buffer(char c){
 		case '\n':
 			printf("\r\n");
 			break;
+		case ' ': // just simply space
+			if (CUTE.col < 79){
+				printf("%c", c);
+				CUTE.col++;
+			}
+			break;
 		default:
 			printf("%c", c);
 			break;
@@ -247,33 +282,44 @@ void display_buffer(char c){
 	fflush(stdout);
 }
 
-/* resize buffer */
-void resize_buffer(){
-	buf_size *= 2;
-	buffer = realloc(buffer, buf_size); // reallocate
-	if (buffer == NULL) die("resize_buffer failed");
-}
-
 /* process user input from STDIN */
 void handle_input(char c){
-
 	switch(c){
+		case '\033':
+			{ // begin of block
+				char seq[3];
+				if (read(STDIN_FILENO, &seq[0], 1) == -1) break; 
+				if (read(STDIN_FILENO, &seq[1], 1) == -1) break;
+				if (seq[0] == '['){
+					switch (seq[1]) {
+						case 'A': // Up arrow
+							if (CUTE.row > 0) CUTE.row--;
+							break;
+						case 'B': // Down arrow
+							if (CUTE.row < 23) CUTE.row++; // Assuming a 24-row terminal
+							break;
+						case 'C': // Right arrow
+							if (CUTE.col < 79) CUTE.col++; // Assume 80-col terminal, can use ioctl() to figure out
+							break;
+						case 'D':
+							if (CUTE.col > 0) CUTE.col--;
+							break;
+						default:
+							break;
+					}
+					move_cursor(CUTE.row, CUTE.col); // Move cursor to the new position
+				}
+			} // end of block
+			break;
 		case 127: // DELETE or BACKSPACE
 		case 8: // this the same as BACKSPACE
-			if ((buffer_index - 1) >= 0) buffer[--buffer_index] = 0; // haven't implement arrow key delete yet...
-			// this is to allow not to exceed pointer, but I will ignore anything beyond 1024 now lol
 			break;
 		case '\r': // ENTER
 		case '\n': // ENTER
-			buffer[buffer_index] = c;
-			buffer_index++;
 			break;
 		default: // Regular characters
-			buffer[buffer_index] = c;
-			buffer_index++;
 			break;
 	} // end of switch
-
 }
 
 /* get current file size -- IGNORE THIS FOR NOW */
@@ -291,14 +337,13 @@ int get_file_size(char* file_name){
 	return res;
 }
 
-
 /* Main Method */
 int main(int argc, char *argv[]){
-	if (argc <= 1) die("Oops we haven't implemented that yet");
+	if (argc <= 1) die("Oops we haven't implemented that yet"); // I will implement this logic later
 
-	// allocate for buffer
-	buffer = malloc(buf_size + 1); // buf size is currently 1024, 1 is for null terminate
-	if (buffer == NULL) die("Malloc failed");
+	int file_size = get_file_size(argv[1]);
+	file_write_to = fopen(argv[1], "rb"); // in the mean time I will do this
+	file_to_buffer(file_write_to, file_size); // now read from file to buffer
 
 	// catch error signal
 	if (signal(SIGINT, sig_catch) == SIG_ERR) die("signal(SIGINT) error"); 
@@ -307,9 +352,10 @@ int main(int argc, char *argv[]){
 
 
 	clear_screen(); // clear screen here
+	move_cursor(CUTE.row, CUTE.col); // move to OG position of 0 0 in the beginning
+
 	// raw mode
 	if (tty_raw(STDIN_FILENO) < 0) die("tty_raw error");
-	printf("Enter raw mode characters, terminate with CTRL+Q\r\n");
 
 	// now write to buffer and print to terminal screen
 	int i;
@@ -322,14 +368,9 @@ int main(int argc, char *argv[]){
 		}
 	}
 	display_buffer('\n');
-	buffer[buffer_index] = '\n';
-	
-	// now write from buffer to file
-	fp = fopen(argv[1], "wb"); // !!! it will overwrite files, using TEMPORARY
-	if (fp == NULL) die("Problem with fopen()");
-	int bytes_read = fwrite(buffer, sizeof(char), buffer_index + 1, fp); // + 1 for '\0'
-	free(buffer);
-	fclose(fp);
+
+	free_buffer(&buffer, file_rows); // free everything
+	fclose(file_write_to);
 
 	// reset to OG state and error checking
 	if (tty_reset(STDIN_FILENO) < 0) die("tty_reset error"); // reset to og setting		
