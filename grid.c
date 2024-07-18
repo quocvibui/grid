@@ -34,7 +34,7 @@ struct LINE{ // each line keep their own string and length of the string
 	char *str;
 };
 
-struct CURPOR{
+struct CURPOR{ // cusor position
 	int row;
 	int col;
 };
@@ -48,6 +48,7 @@ static FILE *file_write_to;
 // global variables for buffer system
 struct LINE **buffer = NULL; // char[file_rows][file_columns]
 int file_rows = 0; // keep track of max file rows --- or max file lines
+int buf_line_no = 0; // switch from file_rows to buf_line_no after print_buffer()
 
 // global variables for cursor positions
 static struct CURPOR CUTE = {0, 0}; // now I can manipulater with CUTE.row CUTE.col
@@ -61,7 +62,7 @@ void file_to_buffer(FILE *fp, int file_size){
 	while (file_size > 0){
 		struct LINE **temp = (struct LINE **) realloc(buffer, (++file_rows) * sizeof(struct LINE *));
 		if (temp == NULL){
-			for (int i = 0; i < file_rows; i++)
+			for (int i = 0; i < file_rows - 1; i++) // - 1 here because of the above, so we don't get segmentation
             	free(buffer[i]); // free char* /columns allocated prior
     
 			free(buffer);
@@ -96,12 +97,13 @@ void file_to_buffer(FILE *fp, int file_size){
 }
 
 void print_buffer(struct LINE **buffer, int file_rows) {
-	// as of now, it works when I do i < file_rows - 1 => kinda WEIRD, need to check where I have gone wrong ...
+	// reason why it is file_rows - 1, is because file_rows when read really start at 1
     for (int i = 0; i < file_rows - 1; i++) {
 		for (int j = 0; j < buffer[i]->len; j++){
 			putchar(buffer[i]->str[j]);
 		}
 		putchar('\n');
+		buf_line_no++; // switch to buf_line_no as a way to keep track of how many lines there are
     }
 }
 
@@ -109,7 +111,8 @@ void print_buffer(struct LINE **buffer, int file_rows) {
 void free_buffer(struct LINE ***obj, int line_size){
 	if (*obj == NULL) return;
 
-	for (int i = 0; i < file_rows - 1; i++){
+	// switch to buf_line_no as a way to keep track of how many lines there are
+	for (int i = 0; i < buf_line_no; i++){
 		if ((*obj)[i] != NULL) {
 			free((*obj)[i]->str); // Free str inside LINE
 			free((*obj)[i]); // Free LINE
@@ -158,37 +161,40 @@ void del_cols(struct LINE *obj, char c, int pos){
 	if (temp != NULL) obj->str = temp;
 }
 
-
+/* now I will implement adding rows randomly at any point in the file */
 // add more rows --- which means add more lines to the file
-void add_rows(struct LINE ***obj){
-	if (file_rows < 0) return; // < 0, because you can only add from 0 up
+void add_rows(struct LINE ***obj, int line_no){
+	if (buf_line_no < 0) return; // < 0, because you can only add from 0 up
+	
+	if (line_no < 0 || line_no > buf_line_no);
 
-	struct LINE **temp = (struct LINE **) realloc(*obj, (file_rows + 1) * sizeof(struct LINE *));
+	struct LINE **temp = (struct LINE **) realloc(*obj, (buf_line_no + 1) * sizeof(struct LINE *));
 	if (temp == NULL){
-		for (int i = 0; i < file_rows; i++)
-			free(obj[i]); // free char*/columns allocated prior
-		
-		free(*obj);
-	die("Initial allocation failed");
-	}
-	file_rows++;
-	*obj = temp;
-}
-
-// delete rows --- which means delete lines from the file
-void del_rows(struct LINE ***obj){
-	if (file_rows <= 0) return;
-
-	free(obj[--file_rows]); // we minus 1 here because of the indexing of arrays
-	struct LINE **temp = (struct LINE **) realloc(*obj, file_rows * sizeof(struct LINE *));
-	if (temp == NULL && file_rows > 0){
-		for (int i = 0; i < file_rows; i++)
+		for (int i = 0; i < buf_line_no; i++)
 			free(obj[i]); // free char*/columns allocated prior
 		
 		free(*obj);
 		die("Initial allocation failed");
 	}
-	// we don't have file_rows-- because we have already done that earlier
+	*obj = temp;	
+
+	buf_line_no++;
+}
+
+// delete rows --- which means delete lines from the file
+void del_rows(struct LINE ***obj){
+	if (buf_line_no <= 0) return;
+
+	free(obj[--buf_line_no]); // we minus 1 here because of the indexing of arrays
+	struct LINE **temp = (struct LINE **) realloc(*obj, buf_line_no * sizeof(struct LINE *));
+	if (temp == NULL && buf_line_no > 0){
+		for (int i = 0; i < buf_line_no; i++)
+			free(obj[i]); // free char*/columns allocated prior
+		
+		free(*obj);
+		die("Initial allocation failed");
+	}
+	// we don't have buf_line_no-- because we have already done that earlier
 	*obj = temp;
 }
 /*-------------------------------------------------------------------------------------------------*/
@@ -379,7 +385,7 @@ int main(int argc, char *argv[]){
 	}
 	display_buffer('\n');
 
-	free_buffer(&buffer, file_rows); // free everything
+	free_buffer(&buffer, buf_line_no); // free everything
 	fclose(file_write_to);
 
 	// reset to OG state and error checking
