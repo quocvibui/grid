@@ -3,6 +3,7 @@
  * Quoc Bui (buiviquoc@gmail.com)
  * Works on xterm, emulator of VT100 term
  * This is a text-editor
+ * Note: I tested the functionality on Apple's default Terminal
  */
 #include <termios.h> // terminal of the screen
 #include <stdio.h>
@@ -281,7 +282,7 @@ void print_new_line(char *s){
 	printf("%s", s); // print out the string
 }
 
-// (3) Move the cursor around
+// (3) Move the cursor around -- generalized function to be used anywhere
 void move_cursor(int row, int col){
 	printf("\033[%d;%dH", row + 1, col + 1);
 	fflush(stdout);
