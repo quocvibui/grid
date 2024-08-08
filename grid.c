@@ -4,22 +4,22 @@
  * Works on xterm, emulator of VT100 term
  * This is a text-editor
  */
-#include <termios.h>
+#include <termios.h> // terminal of the screen
 #include <stdio.h>
 #include <stdlib.h>
-#include <signal.h>
+#include <signal.h> 
 #include <unistd.h>
 #include <errno.h>
 #include <string.h>
 
 // function headers
-int tty_raw(int fd);
-int tty_reset(int fd); 
-void clear_screen();
-void display_buffer(char c);
-void handle_input(char c);
-void sig_catch(int signo);
-int get_file_size(char* file_name);
+int		tty_raw(int fd);
+int		tty_reset(int fd); 
+void	clear_screen();
+void	display_buffer(char c);
+void	handle_input(char c);
+void	sig_catch(int signo);
+int		get_file_size(char* file_name);
 
 /* error checking method */
 void die(char *str){
@@ -53,8 +53,7 @@ int buf_line_no = 0; // switch from file_rows to buf_line_no after print_buffer(
 // global variables for cursor positions
 static struct CURPOR CUTE = {0, 0}; // now I can manipulater with CUTE.row CUTE.col
 
-/*-------------------------------| GOAL 2 - BUFFER SYSTEM func() |--------------------------------------*/
-
+/*-------------------------------| BUFFER SYSTEM func() |--------------------------------------*/
 // allocate memory from file to buffer here... | so far, no logic error as far as I can see
 void file_to_buffer(FILE *fp, int file_size){
 	char c;
@@ -96,6 +95,8 @@ void file_to_buffer(FILE *fp, int file_size){
 	} // end of main while loop
 }
 
+// this function only print the whole buffer, not singular line, not recommended for performance reason
+// to clear a whole line and then reprint everything ...
 void print_buffer(struct LINE **buffer, int file_rows) {
 	// reason why it is file_rows - 1, is because file_rows when read really start at 1
     for (int i = 0; i < file_rows - 1; i++) {
@@ -122,9 +123,7 @@ void free_buffer(struct LINE ***obj, int line_size){
 	free(*obj); // free buffer now
 }
 
-/*
- * add more columns --- which means add more characters to a line
- */ 
+// add more columns --- which means add more characters to a line
 void add_cols(struct LINE *obj, char c, int pos){
 	if (obj->len < 0) return; 
 
@@ -199,6 +198,7 @@ void del_rows(struct LINE ***obj){
 }
 /*-------------------------------------------------------------------------------------------------*/
 
+/*-------------------------------| NON CANONICAL MODE START & END |--------------------------------*/
 /* put terminal into a raw mode */
 int tty_raw(int fd){
 	int err;
@@ -262,19 +262,45 @@ void sig_catch(int signo){
 	tty_reset(STDIN_FILENO);
 	exit(0);
 }
+/*-------------------------------------------------------------------------------------------------*/
 
+/*-------------------------------| DISPAY ON TERMINAL - finer changes|-----------------------------*/
 /* Do what it meant, clear everything */
 void clear_screen(){
 	printf("\e[1;1H\e[2J");
 }
 
-/* Move the cursor around */
+// (1)
+void clear_line(){
+	printf("\33[2K"); // clear whole line where cursor is on
+}
+
+// (2)
+void print_new_line(char *s){
+	printf("\033[0G"); // move cursor back to column 0
+	printf("%s", s); // print out the string
+}
+
+// (3) Move the cursor around
 void move_cursor(int row, int col){
 	printf("\033[%d;%dH", row + 1, col + 1);
 	fflush(stdout);
 }
 
-/* print what is in there - REWRITE THIS */
+// (1)(2)(3) will be used together to make changes the screen line by line, work on each line first, row comes later
+void add_char_update_screen_buffer(char c, int row, int col){
+	add_cols(buffer[row], c, col); // do internal update to buffer
+	clear_line(); // clear the line the cursor is on
+	print_new_line(buffer[row]->str); // print the new updated line
+	fflush(stdout);
+	move_cursor(row, ++CUTE.col); // as we are adding, cursor will move forward with the character
+	fflush(stdout);
+}
+
+
+/*-------------------------------------------------------------------------------------------------*/
+
+/* print what is in there - MIGHT DELETE */
 void display_buffer(char c){
 	switch(c){
 		case 127:
@@ -334,6 +360,7 @@ void handle_input(char c){
 		case '\n': // ENTER
 			break;
 		default: // Regular characters
+			add_char_update_screen_buffer(c, CUTE.row, CUTE.col);
 			break;
 	} // end of switch
 }
@@ -380,7 +407,6 @@ int main(int argc, char *argv[]){
 		if ((c &= 255) == 021) break; /* 021 = CTRL-Q */
 		else{
 			handle_input(c);
-			display_buffer(c);
 		}
 	}
 	display_buffer('\n');
