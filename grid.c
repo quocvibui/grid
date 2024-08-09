@@ -17,7 +17,6 @@
 int		tty_raw(int fd);
 int		tty_reset(int fd); 
 void	clear_screen();
-void	display_buffer(char c);
 void	handle_input(char c);
 void	sig_catch(int signo);
 int		get_file_size(char* file_name);
@@ -52,7 +51,7 @@ int file_rows = 0; // keep track of max file rows --- or max file lines
 int buf_line_no = 0; // switch from file_rows to buf_line_no after print_buffer()
 
 // global variables for cursor positions
-static struct CURPOR CUTE = {0, 0}; // now I can manipulater with CUTE.row CUTE.col
+static struct CURPOR CUTE = {0, 0}; // now I can manipulater with CUTE.row CUTE.col, index based 0
 
 /*-------------------------------| BUFFER SYSTEM func() |--------------------------------------*/
 // allocate memory from file to buffer here... | so far, no logic error as far as I can see
@@ -96,6 +95,22 @@ void file_to_buffer(FILE *fp, int file_size){
 	} // end of main while loop
 }
 
+// write from buffer to file
+void buffer_to_file(struct LINE **obj, char *filename){
+	FILE *fp = fopen(filename, "wb");
+
+	for (int i = 0; i < buf_line_no; i++){
+		char *s = obj[i]->str;
+		int len = obj[i]->len;
+		int byte_read = fwrite(s, sizeof(char), len, fp);
+		if (byte_read != len) die("Error writing buffer to file");
+		fputc('\n', fp);
+	}
+
+	printf("Completed buffer_to_file\n");
+	fclose(fp);
+}
+
 // this function only print the whole buffer, not singular line, not recommended for performance reason
 // to clear a whole line and then reprint everything ...
 void print_buffer(struct LINE **buffer, int file_rows) {
@@ -110,7 +125,7 @@ void print_buffer(struct LINE **buffer, int file_rows) {
 }
 
 // now delete memories used
-void free_buffer(struct LINE ***obj, int line_size){
+void free_buffer(struct LINE ***obj){
 	if (*obj == NULL) return;
 
 	// switch to buf_line_no as a way to keep track of how many lines there are
@@ -166,7 +181,7 @@ void del_cols(struct LINE *obj, char c, int pos){
 void add_rows(struct LINE ***obj, int line_no){
 	if (buf_line_no < 0) return; // < 0, because you can only add from 0 up
 	
-	if (line_no < 0 || line_no > buf_line_no);
+	if (line_no < 0 || line_no > buf_line_no) return; // illegal move, you can't go outside like that
 
 	struct LINE **temp = (struct LINE **) realloc(*obj, (buf_line_no + 1) * sizeof(struct LINE *));
 	if (temp == NULL){
@@ -182,6 +197,8 @@ void add_rows(struct LINE ***obj, int line_no){
 }
 
 // delete rows --- which means delete lines from the file
+// just noticed that it may not be able to delete any lines, will have to pass another arguement for that
+// probably will have to pass a line_no arguement
 void del_rows(struct LINE ***obj){
 	if (buf_line_no <= 0) return;
 
@@ -293,37 +310,10 @@ void add_char_update_screen_buffer(char c, int row, int col){
 	add_cols(buffer[row], c, col); // do internal update to buffer
 	clear_line(); // clear the line the cursor is on
 	print_new_line(buffer[row]->str); // print the new updated line
-	fflush(stdout);
 	move_cursor(row, ++CUTE.col); // as we are adding, cursor will move forward with the character
 	fflush(stdout);
 }
-
-
 /*-------------------------------------------------------------------------------------------------*/
-
-/* print what is in there - MIGHT DELETE */
-void display_buffer(char c){
-	switch(c){
-		case 127:
-		case 8:
-			printf("\b \b");
-			break;
-		case '\r':
-		case '\n':
-			printf("\r\n");
-			break;
-		case ' ': // just simply space
-			if (CUTE.col < 79){
-				printf("%c", c);
-				CUTE.col++;
-			}
-			break;
-		default:
-			printf("%c", c);
-			break;
-	}
-	fflush(stdout);
-}
 
 /* process user input from STDIN */
 void handle_input(char c){
@@ -392,8 +382,9 @@ int main(int argc, char *argv[]){
 
 	int file_size = get_file_size(argv[1]);
 	file_write_to = fopen(argv[1], "rb"); // in the mean time I will do this
-
 	file_to_buffer(file_write_to, file_size); // now read from file to buffer
+	fclose(file_write_to); // now we close the file, don't need it for now
+
 	clear_screen(); 
 	print_buffer(buffer, file_rows); // let see if it print
 	move_cursor(CUTE.row, CUTE.col); // move to OG position of 0 0 in the beginning
@@ -410,17 +401,19 @@ int main(int argc, char *argv[]){
 			handle_input(c);
 		}
 	}
-	display_buffer('\n');
+	printf("\n"); // simply for visual, might not even need this
 
-	free_buffer(&buffer, buf_line_no); // free everything
-	fclose(file_write_to);
+	buffer_to_file(buffer, argv[1]); // now update the file
 
+	free_buffer(&buffer); // free everything
+	
 	// reset to OG state and error checking
 	if (tty_reset(STDIN_FILENO) < 0) die("tty_reset error"); // reset to og setting		
 	if (i <= 0) die("read error");
 
 	clear_screen(); // clear screen again :)
 	printf("****\n\nFILE SIZE IS: %d\n\n****\n", file_size);
+	printf("***\nbuffer line no: %d \n\n***\n", buf_line_no);
 	
 	return 0; 
 }
