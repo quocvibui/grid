@@ -327,12 +327,17 @@ void handle_input(char c){
 					switch (seq[1]) {
 						case 'A': // Up arrow
 							if (CUTE.row > 0) CUTE.row--;
+							if (CUTE.col > buffer[CUTE.row]->len) // to not exceed limit travel
+								CUTE.col = buffer[CUTE.row]->len;
 							break;
 						case 'B': // Down arrow
-							if (CUTE.row < 23) CUTE.row++; // Assuming a 24-row terminal
+							if (CUTE.row < 23) CUTE.row++; // Assuming a 24-row terminal for now ...
+							if (CUTE.col > buffer[CUTE.row]->len) // to not exceed limit travel, like VIM
+								CUTE.col = buffer[CUTE.row]->len;
 							break;
 						case 'C': // Right arrow
-							if (CUTE.col < 79) CUTE.col++; // Assume 80-col terminal, can use ioctl() to figure out
+							if (CUTE.col >= buffer[CUTE.row]->len) CUTE.col = buffer[CUTE.row]->len; // doesn't account when line empty
+							else CUTE.col++;
 							break;
 						case 'D':
 							if (CUTE.col > 0) CUTE.col--;
