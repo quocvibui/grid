@@ -167,7 +167,7 @@ void del_cols(struct LINE *obj, char c, int pos){
 
 	if (pos < 0 || pos > obj->len) return; // if not in limit, do nothing and return
 
-	memmove(obj->str + pos - 1 , obj->str + pos + 1, obj->len - pos - 1);
+	memmove(obj->str + pos - 1 , obj->str + pos, obj->len - pos);
 
 	obj->len--;
 
@@ -178,41 +178,40 @@ void del_cols(struct LINE *obj, char c, int pos){
 
 /* now I will implement adding rows randomly at any point in the file */
 // add more rows --- which means add more lines to the file
-void add_rows(struct LINE ***obj, int line_no){
+void add_rows(struct LINE **obj, int line_no){
 	if (buf_line_no < 0) return; // < 0, because you can only add from 0 up
-	
+
 	if (line_no < 0 || line_no > buf_line_no) return; // illegal move, you can't go outside like that
 
-	struct LINE **temp = (struct LINE **) realloc(*obj, (buf_line_no + 1) * sizeof(struct LINE *));
-	if (temp == NULL){
-		for (int i = 0; i < buf_line_no; i++)
-			free(obj[i]); // free char*/columns allocated prior
-		
-		free(*obj);
-		die("Initial allocation failed");
-	}
-	*obj = temp;	
+	struct LINE *newLINE = (struct LINE *) malloc(sizeof(struct LINE)); // malloc memory for new LINE
+	// ignore memory alloc bugs for now ... 
+
+	newLINE->str = (char *) malloc(sizeof(char) * 0); // malloc for str in new LINE
+	newLINE->len = 0; // always start with 0
+
+	memmove(obj + line_no + 1, obj + line_no, line_no - line_no); // move by certain line_no to add char
+
+	obj[line_no] = newLINE;
 
 	buf_line_no++;
 }
 
 // delete rows --- which means delete lines from the file
-// just noticed that it may not be able to delete any lines, will have to pass another arguement for that
-// probably will have to pass a line_no arguement
-void del_rows(struct LINE ***obj){
+void del_rows(struct LINE **obj, int line_no){
 	if (buf_line_no <= 0) return;
 
-	free(obj[--buf_line_no]); // we minus 1 here because of the indexing of arrays
-	struct LINE **temp = (struct LINE **) realloc(*obj, buf_line_no * sizeof(struct LINE *));
-	if (temp == NULL && buf_line_no > 0){
-		for (int i = 0; i < buf_line_no; i++)
-			free(obj[i]); // free char*/columns allocated prior
-		
-		free(*obj);
-		die("Initial allocation failed");
-	}
-	// we don't have buf_line_no-- because we have already done that earlier
-	*obj = temp;
+	if (line_no < 0 || line_no > buf_line_no) return; // illegal move, you can't go outside like that
+
+	free(obj[line_no]->str); // first free the str in the obj
+	free(obj[line_no]); // then the obj
+
+	memmove(obj + line_no - 1 , obj + line_no, buf_line_no - line_no);
+
+	buf_line_no--;
+
+	// now shrink the memory :)	
+	struct LINE **temp = realloc(obj, buf_line_no * sizeof(struct LINE*));
+	if (temp != NULL) obj = temp;
 }
 /*-------------------------------------------------------------------------------------------------*/
 
@@ -294,9 +293,11 @@ void clear_line(){
 }
 
 // (2)
-void print_new_line(char *s){
+void print_new_line(struct LINE *obj){
 	printf("\033[0G"); // move cursor back to column 0
-	printf("%s", s); // print out the string
+	for (int i = 0; i < obj->len; i++){
+		putchar(obj->str[i]);
+	}
 }
 
 // (3) Move the cursor around -- generalized function to be used anywhere
@@ -309,9 +310,23 @@ void move_cursor(int row, int col){
 void add_char_update_screen_buffer(char c, int row, int col){
 	add_cols(buffer[row], c, col); // do internal update to buffer
 	clear_line(); // clear the line the cursor is on
-	print_new_line(buffer[row]->str); // print the new updated line
+	print_new_line(buffer[row]); // print the new updated line
 	move_cursor(row, ++CUTE.col); // as we are adding, cursor will move forward with the character
 	fflush(stdout);
+}
+// reverse of add_char_update ...
+void del_char_update_screen_buffer(char c, int row, int col){
+	del_cols(buffer[row], c, col); // do internal update to buffer
+	clear_line(); // clear the line the cursor is on
+	print_new_line(buffer[row]); // print the new updated line
+	move_cursor(row, --CUTE.col); // as we are deletingg, cursor will move backward with the character
+	fflush(stdout);
+}
+
+// ---- REWORK ADD and DEL ROWS to account for new insights. add & del will rather create a 
+// new line with \n string or what ever comes after cols cursor, while doing that, it leaves a \n on its path
+void add_line_update_screen_buffer(int line_no){
+
 }
 /*-------------------------------------------------------------------------------------------------*/
 
@@ -331,7 +346,7 @@ void handle_input(char c){
 								CUTE.col = buffer[CUTE.row]->len;
 							break;
 						case 'B': // Down arrow
-							if (CUTE.row < 23) CUTE.row++; // Assuming a 24-row terminal for now ...
+							if (CUTE.row < buf_line_no - 1) CUTE.row++; // Assuming a 24-row terminal for now ...
 							if (CUTE.col > buffer[CUTE.row]->len) // to not exceed limit travel, like VIM
 								CUTE.col = buffer[CUTE.row]->len;
 							break;
@@ -351,10 +366,10 @@ void handle_input(char c){
 			break;
 		case 127: // DELETE or BACKSPACE
 		case 8: // this the same as BACKSPACE
+			del_char_update_screen_buffer(c, CUTE.row, CUTE.col);
 			break;
 		case '\r': // ENTER
 		case '\n': // ENTER
-			break;
 		default: // Regular characters
 			add_char_update_screen_buffer(c, CUTE.row, CUTE.col);
 			break;
