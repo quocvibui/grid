@@ -279,7 +279,7 @@ void sig_catch(int signo){
 	tty_reset(STDIN_FILENO);
 	exit(0);
 }
-/*-------------------------------------------------------------------------------------------------*/
+/*-------------------------------------------------------------------------------------------------*/ 
 
 /*-------------------------------| DISPAY ON TERMINAL - finer changes|-----------------------------*/
 /* Do what it meant, clear everything */
@@ -314,6 +314,7 @@ void add_char_update_screen_buffer(char c, int row, int col){
 	move_cursor(row, ++CUTE.col); // as we are adding, cursor will move forward with the character
 	fflush(stdout);
 }
+
 // reverse of add_char_update ...
 void del_char_update_screen_buffer(char c, int row, int col){
 	del_cols(buffer[row], c, col); // do internal update to buffer
