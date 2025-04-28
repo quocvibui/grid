@@ -52,8 +52,8 @@ int main(int argc, char *argv[]){
 	if (i <= 0) die("read error");
 
 	clear_screen(); // clear screen again :)
-	printf("****\n\nFILE SIZE IS: %d\n\n****\n", file_size);
-	printf("***\nbuffer line no: %d \n\n***\n", buf_line_no);
+	// printf("****\n\nFILE SIZE IS: %d\n\n****\n", file_size);
+	// printf("***\nbuffer line no: %d \n\n***\n", buf_line_no);
 	
 	return 0; 
 }

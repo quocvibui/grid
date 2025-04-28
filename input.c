@@ -45,6 +45,20 @@ void handle_input(char c){
 			break;
 		case '\r': // ENTER
 		case '\n': // ENTER
+		{
+			// 1) insert a new blank line below current row
+			add_rows(buffer, CUTE.row + 1);
+
+			// 2) redraw all lines from top
+			clear_screen();
+			print_buffer(buffer, file_rows);
+
+			// 3) move cursor down and reset to col 0
+			CUTE.row++;
+			CUTE.col = 0;
+			move_cursor(CUTE.row, CUTE.col);
+			break;
+        }
 		default: // Regular characters
 			add_char_update_screen_buffer(c, CUTE.row, CUTE.col);
 			break;
