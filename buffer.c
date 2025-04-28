@@ -130,18 +130,23 @@ void add_cols(struct LINE *obj, char c, int pos){
 }
 
 // delete columns --- which means delete characters from a line
-void del_cols(struct LINE *obj, char c, int pos){
-	if (obj->len <= 0) return;
+void del_cols(struct LINE *obj, char c, int pos) {
+    // nothing to delete if line is empty
+    if (obj->len <= 0) return;
 
-	if (pos < 0 || pos > obj->len) return; // if not in limit, do nothing and return
+    // only delete if pos is in [1..len]
+    if (pos <= 0 || pos > obj->len) return;
 
-	memmove(obj->str + pos - 1 , obj->str + pos, obj->len - pos);
+    // shift everything after `pos` left by one
+    memmove(obj->str + pos - 1,
+            obj->str + pos,
+            obj->len - pos);
 
-	obj->len--;
+    obj->len--;
 
-	// now shrink the memory :)
-	char *temp = realloc(obj->str, obj->len * sizeof(char));
-	if (temp != NULL) obj->str = temp;
+    // shrink buffer (optional)
+    char *tmp = realloc(obj->str, obj->len * sizeof(char));
+    if (tmp) obj->str = tmp;
 }
 
 /* now I will implement adding rows randomly at any point in the file */

@@ -4,7 +4,7 @@
 #include "display.h"
 #include "buffer.h"
 
-/*-------------------------------| DISPAY ON TERMINAL - finer changes|-----------------------------*/
+/*-------------------------------| DISPLAY ON TERMINAL - finer changes|-----------------------------*/
 /* Do what it meant, clear everything */
 void clear_screen(){
 	printf("\e[1;1H\e[2J");
@@ -39,12 +39,16 @@ void add_char_update_screen_buffer(char c, int row, int col){
 }
 
 // reverse of add_char_update ...
-void del_char_update_screen_buffer(char c, int row, int col){
-	del_cols(buffer[row], c, col); // do internal update to buffer
-	clear_line(); // clear the line the cursor is on
-	print_new_line(buffer[row]); // print the new updated line
-	move_cursor(row, --CUTE.col); // as we are deletingg, cursor will move backward with the character
-	fflush(stdout);
+void del_char_update_screen_buffer(char c, int row, int col) {
+    // only backspace if we’re not already at column 0
+    if (CUTE.col > 0) {
+        del_cols(buffer[row], c, CUTE.col);
+        clear_line();
+        print_new_line(buffer[row]);
+        CUTE.col--;
+        move_cursor(row, CUTE.col);
+        fflush(stdout);
+    }
 }
 
 // ---- REWORK ADD and DEL ROWS to account for new insights. add & del will rather create a 
