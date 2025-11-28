@@ -1,9 +1,21 @@
 /*
- * Boiler code from AP in the UNIX ENV
- * Quoc Bui (buiviquoc@gmail.com)
- * Works on xterm, emulator of VT100 term
- * This is a text-editor
- * Note: I tested the functionality on Apple's default Terminal
+ * Grid Text Editor
+ * A modern, minimal text editor for the terminal
+ *
+ * Author: Quoc Bui (buiviquoc@gmail.com)
+ * Optimized for Mac Terminal
+ *
+ * Shortcuts:
+ *   Ctrl+S       Save file
+ *   Ctrl+Q       Quit
+ *   Ctrl+F       Find/Search
+ *   Ctrl+C       Copy selection
+ *   Ctrl+X       Cut selection
+ *   Ctrl+V       Paste
+ *   Ctrl+A       Select all
+ *   Ctrl+/       Toggle comment
+ *   Shift+Arrow  Select text
+ *   Arrow keys   Navigate
  */
 #include "common.h"
 #include "terminal.h"
@@ -11,49 +23,74 @@
 #include "display.h"
 #include "input.h"
 
-/* Main Method */
-int main(int argc, char *argv[]){
-	if (argc <= 1) die("Oops we haven't implemented that yet"); // I will implement this logic later
+/* Global running flag */
+int running = 1;
 
-	// catch error signal
-	if (signal(SIGINT, sig_catch) == SIG_ERR) die("signal(SIGINT) error"); 
-	if (signal(SIGQUIT, sig_catch) == SIG_ERR) die("signal(SIGQUIT) error");
-	if (signal(SIGTERM, sig_catch) == SIG_ERR) die("signal(SIGTERM) error");
+/* Handle window resize */
+static void handle_resize(int sig)
+{
+	(void)sig;
+	get_terminal_size();
+	refresh_screen();
+}
 
-	int file_size = get_file_size(argv[1]);
-	file_write_to = fopen(argv[1], "rb"); // in the mean time I will do this
-	file_to_buffer(file_write_to, file_size); // now read from file to buffer
-	fclose(file_write_to); // now we close the file, don't need it for now
-
-	clear_screen(); 
-	print_buffer(buffer, file_rows); // let see if it print
-	move_cursor(CUTE.row, CUTE.col); // move to OG position of 0 0 in the beginning
-
-	// raw mode
-	if (tty_raw(STDIN_FILENO) < 0) die("tty_raw error");
-
-	// now write to buffer and print to terminal screen
-	int i;
-	char c;
-	while ((i = read(STDIN_FILENO, &c, 1)) == 1){
-		if ((c &= 255) == 021) break; /* 021 = CTRL-Q */
-		else{
-			handle_input(c);
-		}
+int main(int argc, char *argv[])
+{
+	/* Check arguments */
+	if (argc < 2) {
+		fprintf(stderr, "Usage: grid <filename>\n");
+		exit(1);
 	}
-	printf("\n"); // simply for visual, might not even need this
 
-	buffer_to_file(buffer, argv[1]); // now update the file
+	/* Set up signal handlers */
+	if (signal(SIGINT, sig_catch) == SIG_ERR)
+		die("signal(SIGINT) error");
+	if (signal(SIGQUIT, sig_catch) == SIG_ERR)
+		die("signal(SIGQUIT) error");
+	if (signal(SIGTERM, sig_catch) == SIG_ERR)
+		die("signal(SIGTERM) error");
+	if (signal(SIGWINCH, handle_resize) == SIG_ERR)
+		die("signal(SIGWINCH) error");
 
-	free_buffer(&buffer); // free everything
-	
-	// reset to OG state and error checking
-	if (tty_reset(STDIN_FILENO) < 0) die("tty_reset error"); // reset to og setting		
-	if (i <= 0) die("read error");
+	/* Save filename */
+	current_filename = argv[1];
 
-	clear_screen(); // clear screen again :)
-	// printf("****\n\nFILE SIZE IS: %d\n\n****\n", file_size);
-	// printf("***\nbuffer line no: %d \n\n***\n", buf_line_no);
-	
-	return 0; 
+	/* Get terminal size */
+	get_terminal_size();
+
+	/* Load file into buffer */
+	int file_size = get_file_size(argv[1]);
+	FILE *fp = fopen(argv[1], "rb");
+	file_to_buffer(fp, file_size);
+	if (fp)
+		fclose(fp);
+
+	/* Enter raw mode */
+	if (tty_raw(STDIN_FILENO) < 0)
+		die("tty_raw error");
+
+	/* Initial status message */
+	set_status_message("HELP: Ctrl+S = save | Ctrl+F = find | Ctrl+Q = quit");
+
+	/* Main loop */
+	while (running) {
+		refresh_screen();
+		handle_input();
+	}
+
+	/* Clean up */
+	tty_reset(STDIN_FILENO);
+	clear_screen();
+
+	/* Free clipboard */
+	if (clipboard) {
+		for (int i = 0; i < clipboard_lines; i++)
+			free(clipboard[i]);
+		free(clipboard);
+	}
+
+	/* Free buffer */
+	free_buffer(&buffer);
+
+	return 0;
 }

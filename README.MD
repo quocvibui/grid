@@ -1,35 +1,77 @@
-# Grid, a command-line text editor (In Progress)
-Command-line text editor in C, inspired by vim and nano.
+# Grid
 
-## Current progress
+A modern, minimal text editor for the terminal. Built in C with a focus on simplicity and Mac Terminal compatibility.
 
-### File I/O
-* **Dynamic buffer system**: `struct LINE` array with per-line `len` and `str`
-* **Safe file reading**: `file_to_buffer()` handles both non-empty files and initializes an empty buffer for new files
-* **File saving**: `buffer_to_file()` writes exactly the current lines back to disk
+## Features
 
-### Display
-* **Full-screen redraw**: `clear_screen()` + `print_buffer()` using explicit `\r\n` so every line starts at column 0
-* **Line updates**: `clear_line()` and `print_new_line()` for single-line refreshes
+### Keyboard Shortcuts
 
-### Input & Editing  
-* **Raw terminal mode**: `tty_raw()` / `tty_reset()` with Ctrl-Q to quit
-* **Arrow-key navigation**: `handle_input()` supports ↑↓←→ to move `CUTE.row`/`CUTE.col`
-* **Character insertion & deletion**:
-  * `add_char_update_screen_buffer()` for inserting at cursor
-  * `del_char_update_screen_buffer()` with bounds checks to avoid over-deletion
-* **New-line insertion**: Enter triggers `add_rows()` to insert a blank `LINE`, full redraw, then moves cursor to column 0
+| Shortcut | Action |
+|----------|--------|
+| `Ctrl+S` | Save file |
+| `Ctrl+Q` | Quit (warns if unsaved) |
+| `Ctrl+F` | Find/Search |
+| `Ctrl+C` | Copy selection |
+| `Ctrl+X` | Cut selection |
+| `Ctrl+V` | Paste |
+| `Ctrl+A` | Select all |
+| `Ctrl+/` | Toggle line comment |
+| `Shift+Arrow` | Select text |
+| `Arrow keys` | Navigate |
+| `Home/End` | Start/End of line |
+| `Page Up/Down` | Scroll page |
+| `Enter` | New line |
+| `Backspace` | Delete before cursor |
+| `Delete` | Delete at cursor |
+| `Tab` | Insert tab character |
 
-### Robustness
-* **Empty-file safety**: always initialize at least one blank line so you never dereference `buffer[0]` on a fresh file
-* **Deletion guards**: `del_cols()` and its caller refuse to delete when at column 0 or beyond line length
+### Core Features
 
-## Next steps, things I am thinking about
-* Implement viewport scrolling for files larger than the terminal window
-* Add a "command mode" (e.g. `:` commands) for search, go-to-line, etc.
-* Optimize redraws to avoid full-screen clears on every edit
-* Support opening multiple files/tabs and configuration via flags
+- **Modern UI**: Clean status bar showing filename, modification status, cursor position
+- **Text Selection**: Shift+Arrow keys for selecting text with visual highlighting
+- **Clipboard**: Internal copy/cut/paste system
+- **Search**: Interactive search with Enter to find next
+- **Comment Toggle**: Quick comment/uncomment for C-style code
+- **Viewport Scrolling**: Handles files larger than the terminal window
+- **Window Resize**: Automatically adjusts to terminal size changes
 
-## Resources used
-This instruction booklet was where I started with in order to understand what libraries and elements I have to think about.
-- https://viewsourcecode.org/snaptoken/kilo/
+## Building
+
+```bash
+make
+```
+
+## Usage
+
+```bash
+./grid <filename>
+```
+
+## Requirements
+
+- GCC compiler
+- POSIX-compatible terminal (tested on Mac Terminal)
+
+## Technical Details
+
+### Architecture
+
+- `main.c` - Entry point and main loop
+- `common.c/h` - Shared globals and utilities
+- `types.h` - Data structure definitions
+- `terminal.c/h` - Raw terminal mode handling
+- `buffer.c/h` - Text buffer management
+- `display.c/h` - Screen rendering with efficient updates
+- `input.c/h` - Keyboard input and command processing
+
+### Code Style
+
+Follows Linux kernel coding style:
+- Tab indentation
+- K&R brace style
+- 80-column limit where practical
+
+## Resources
+
+- [Build Your Own Text Editor](https://viewsourcecode.org/snaptoken/kilo/) - Inspiration for terminal handling
+- [Advanced Programming in the UNIX Environment](https://www.apuebook.com/) - Reference for terminal control

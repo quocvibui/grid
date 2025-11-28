@@ -1,6 +1,6 @@
 /*
+ * Grid Text Editor
  * Common definitions, structures, and globals
- * Shared among all components of the text-editor
  */
 #ifndef COMMON_H
 #define COMMON_H
@@ -12,26 +12,52 @@
 #include <unistd.h>
 #include <errno.h>
 #include <string.h>
-#include "types.h"  // Include the common type definitions
+#include <sys/ioctl.h>
+#include "types.h"
 
-/* error checking method */
-void die(char *str);
+/* Terminal state enum */
+typedef enum { RESET, RAW } tty_state;
 
-// global variables for switching TERM modes
+/* Error handling */
+void die(const char *str);
+
+/* Terminal state globals */
 extern struct termios save_termios;
 extern int ttysavefd;
-// Define the enum type
-typedef enum { RESET, RAW } tty_state;
-// Declare the global variable of this type
 extern tty_state ttystate;
-extern FILE *file_write_to;
 
-// global variables for buffer system
-extern struct LINE **buffer; // char[file_rows][file_columns]
-extern int file_rows; // keep track of max file rows --- or max file lines
-extern int buf_line_no; // switch from file_rows to buf_line_no after print_buffer()
+/* Buffer system globals */
+extern struct LINE **buffer;
+extern int buf_line_no;
 
-// global variables for cursor positions
-extern struct CURPOR CUTE; // now I can manipulater with CUTE.row CUTE.col, index based 0
+/* Cursor position - 0-indexed */
+extern struct CURSOR cursor;
+
+/* Selection for copy/cut */
+extern struct SELECTION selection;
+
+/* Clipboard buffer */
+extern char **clipboard;
+extern int clipboard_lines;
+
+/* Editor state */
+extern EditorMode editor_mode;
+extern int modified;
+extern char *current_filename;
+
+/* Search state */
+extern char search_query[256];
+extern int search_query_len;
+
+/* Terminal dimensions */
+extern int term_rows;
+extern int term_cols;
+
+/* Status message */
+extern char status_msg[256];
+extern int status_msg_time;
+
+/* Get terminal size */
+void get_terminal_size(void);
 
 #endif /* COMMON_H */
