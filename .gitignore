@@ -1,7 +1,5 @@
 .DS_Store
-study/.DS_Store
 *.o
 *.out
-study/*.o
-study/*.out
-study/
+grid
+test.txt

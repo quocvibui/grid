@@ -1,6 +1,6 @@
-# Makefile for text editor
+# Grid Text Editor - Makefile
 CC = gcc
-CFLAGS = -g -Wall
+CFLAGS = -g -Wall -Wextra -pedantic -std=c99
 
 # Target executable
 TARGET = grid
@@ -41,3 +41,7 @@ main.o: main.c common.h terminal.h buffer.h display.h input.h types.h
 .PHONY: clean
 clean:
 	rm -f *.o $(TARGET)
+
+# Rebuild all
+.PHONY: rebuild
+rebuild: clean all
